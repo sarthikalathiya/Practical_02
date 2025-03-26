@@ -22,51 +22,94 @@ const SHOP_SCHEDULE = [
     }
   ];
   
-  // Function to convert time string to minutes for easier comparison
-  function convertTimeToMinutes(timeStr) {
-    const [time, period] = timeStr.split(' ');
-    let [hours, minutes] = time.split(':').map(Number);
-    
-    // Convert to 24-hour format
-    if (period === 'PM' && hours < 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-    
-    return hours * 60 + minutes;
-  }
+// Constants
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MINUTES_IN_HOUR = 60;
+const HOURS_IN_DAY = 24;
+
+// Utility functions
+function getCurrentTimeInfo() {
+  const now = new Date();
+  return {
+    day: DAYS[now.getDay()],
+    timeInMinutes: now.getHours() * MINUTES_IN_HOUR + now.getMinutes(),
+    dayIndex: now.getDay()
+  };
+}
+
+function convertTimeToMinutes(timeStr) {
+  const [time, period] = timeStr.split(' ');
+  let [hours, minutes] = time.split(':').map(Number);
   
-  // Function to check if shop is currently open
-  function isShopOpen() {
-    const now = new Date();
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  
+  return hours * MINUTES_IN_HOUR + minutes;
+}
+
+function roundToDecimal(number) {
+  return Math.round(number * 10) / 10;
+}
+
+function getScheduleForDay(day) {
+  return SHOP_SCHEDULE.find(schedule => schedule.day === day);
+}
+
+function calculateHoursDifference(currentMinutes, targetMinutes) {
+  return (targetMinutes - currentMinutes) / MINUTES_IN_HOUR;
+}
+
+// Core functions
+function isShopOpen() {
+  const { day, timeInMinutes } = getCurrentTimeInfo();
+  const todaySchedule = getScheduleForDay(day);
+  
+  if (!todaySchedule) return false;
+  
+  const openTimeInMinutes = convertTimeToMinutes(todaySchedule.open);
+  const closeTimeInMinutes = convertTimeToMinutes(todaySchedule.close);
+  
+  return timeInMinutes >= openTimeInMinutes && timeInMinutes < closeTimeInMinutes;
+}
+
+function getNextOpeningTime() {
+  const { dayIndex, timeInMinutes } = getCurrentTimeInfo();
+  let currentDayIndex = dayIndex;
+  let daysChecked = 0;
+
+  while (daysChecked < DAYS.length) {
+    const schedule = getScheduleForDay(DAYS[currentDayIndex]);
     
-    // Get current day abbreviation (Mon, Tue, etc.)
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const currentDay = days[now.getDay()];
-    
-    // Get current time in minutes
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-    
-    // Find today's schedule
-    const todaySchedule = SHOP_SCHEDULE.find(schedule => schedule.day === currentDay);
-    
-    // If today is not in the schedule, shop is closed
-    if (!todaySchedule) {
-      return false;
+    if (schedule) {
+      const openTimeInMinutes = convertTimeToMinutes(schedule.open);
+      
+      if (daysChecked === 0 && timeInMinutes < openTimeInMinutes) {
+        return calculateHoursDifference(timeInMinutes, openTimeInMinutes);
+      } else if (daysChecked > 0) {
+        return daysChecked * HOURS_IN_DAY + calculateHoursDifference(timeInMinutes, openTimeInMinutes);
+      }
     }
     
-    // Convert shop open and close times to minutes
-    const openTimeInMinutes = convertTimeToMinutes(todaySchedule.open);
+    currentDayIndex = (currentDayIndex + 1) % DAYS.length;
+    daysChecked++;
+  }
+  return 0;
+}
+
+function getShopStatus() {
+  const { day } = getCurrentTimeInfo();
+  const todaySchedule = getScheduleForDay(day);
+  
+  if (isShopOpen()) {
+    const { timeInMinutes } = getCurrentTimeInfo();
     const closeTimeInMinutes = convertTimeToMinutes(todaySchedule.close);
-    
-    // Check if current time is within open and close times
-    return currentTimeInMinutes >= openTimeInMinutes && currentTimeInMinutes < closeTimeInMinutes;
+    const hoursUntilClosing = roundToDecimal(calculateHoursDifference(timeInMinutes, closeTimeInMinutes));
+    return `Open, The shop will be closed within ${hoursUntilClosing} Hrs`;
+  } else {
+    const hoursUntilOpening = roundToDecimal(getNextOpeningTime());
+    return `Closed. The shop will be open after ${hoursUntilOpening} Hrs`;
   }
-  
-  // Get shop status
-  function getShopStatus() {
-    return isShopOpen() ? "Open" : "Closed";
-  }
-  
-  // Display shop status
-  console.log(getShopStatus()); 
+}
+
+// Display shop status
+console.log(getShopStatus());
